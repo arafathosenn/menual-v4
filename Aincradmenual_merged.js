@@ -22,39 +22,22 @@
   const LICENSE_API_URL = "https://licensedevices.akhildotto338.workers.dev/api/trpc/license.validate";
   const SCRIPT_NAME = "AINCRAD";
   const DEVICE_STORAGE_KEY = "aincrad_device_id";
+  const SAVED_KEY_STORAGE = "aincrad_saved_key";
   const SUPPORTED_DOMAINS = ["tarviral.com", "rodaemotor.com", "donpviral.xyz"];
   
   const canvas = document.getElementById("water");
-  const ctx = canvas.getContext("2d", {alpha:true});
-  let W=0,H=0,dpr=1;
+  const ctx = canvas && canvas.getContext ? canvas.getContext("2d", {alpha:true}) : null;
+  // Decorative full-screen animation intentionally disabled for mobile performance.
   function resize(){
-    dpr=Math.min(devicePixelRatio||1,1.5);
-    W=innerWidth; H=innerHeight;
-    canvas.width=W*dpr; canvas.height=H*dpr;
-    canvas.style.width=W+"px"; canvas.style.height=H+"px";
+    if(!canvas||!ctx)return;
+    const dpr=Math.min(devicePixelRatio||1,1.5);
+    canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr;
+    canvas.style.width=innerWidth+"px"; canvas.style.height=innerHeight+"px";
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
   addEventListener("resize",resize,{passive:true});
   resize();
-  let t=0;
-  function drawWater(){
-    t+=0.012;
-    ctx.clearRect(0,0,W,H);
-    ctx.lineWidth=1;
-    ctx.strokeStyle="rgba(55,190,220,.10)";
-    const gap=48;
-    for(let y=-gap;y<H+gap;y+=gap){
-      ctx.beginPath();
-      for(let x=-20;x<=W+20;x+=20){
-        const yy=y+Math.sin(x*.012+t+y*.018)*4;
-        if(x===-20)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
-      }
-      ctx.stroke();
-    }
-    requestAnimationFrame(drawWater);
-  }
-  drawWater();
-  
+
   const notice=document.getElementById("notice");
   const ntitle=document.getElementById("ntitle");
   const ntext=document.getElementById("ntext");
@@ -115,11 +98,7 @@
   }
   
   function targetSequence(){
-    showNotice("KEY VERIFIED","Access confirmed","✓",420);
-    setTimeout(()=>{
-      showNotice("TARGET DETECTED","Destination is ready","≈",520);
-      setTimeout(()=>page("timePage"),150);
-    },390);
+    setTimeout(()=>page("timePage"),150);
   }
   
   document.getElementById("verify").addEventListener("click",async()=>{
@@ -135,15 +114,21 @@
     const result=await verifyLicense(key);
     if(result.allowed){
       btn.textContent="VERIFIED";
-      showToast("SUCCESS",result.data?.message||"Key verified successfully");
-      setTimeout(()=>{btn.disabled=false;btn.textContent="VERIFY ACCESS";targetSequence();},850);
+      localStorage.setItem(SAVED_KEY_STORAGE,key);
+      setTimeout(()=>{btn.disabled=false;btn.textContent="VERIFY ACCESS";targetSequence();},250);
     }else{
       const reason=result.reason?"Reason: "+result.reason:"";
       showNotice("ACCESS DENIED",(result.message||"License validation failed")+(reason?" • "+reason:""),"!",2400);
+      localStorage.removeItem(SAVED_KEY_STORAGE);
       btn.disabled=false;
       btn.textContent="VERIFY ACCESS";
     }
   });
+  const savedKey=localStorage.getItem(SAVED_KEY_STORAGE);
+  if(savedKey){
+    document.getElementById("license").value=savedKey;
+    setTimeout(()=>document.getElementById("verify").click(),0);
+  }
   document.getElementById("license").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("verify").click();});
   document.getElementById("community").addEventListener("click",()=>{location.href="https://t.me/+Qjrl3DUTGVU2MWZl";});
   
@@ -200,8 +185,7 @@
   function startProcessingMessages(){stopProcessingMessages();processMessageRunning=true;}
   function stopProcessingMessages(){processMessageRunning=false;clearTimeout(processMessageTimer);processMessageTimer=0;processMessageQueue=[];processMessageBusy=false;processMessages.innerHTML="";}
   function originalLog(icon,text){
-    // Keep the original operation intact while presenting the reference UI's generic status text.
-    showToast("PROCESSING","Establishing Connection");
+    // Suppress routine progress logs; errors are shown by the error handlers.
   }
   
   let pendingDestination=null;
@@ -247,20 +231,13 @@
     if(!dest)throw new Error("Destination link was not found in the server response");
     originalLog("🎯","REDIRECT TARGET: "+dest.substring(0,40)+"...");
     originalLog("🔑","TOKEN ON: "+dest);
-    [
-      ["🛡️","BYPASSING CLOUDFLARE WAF..."],
-      ["🧬","DECRYPTING DESTINATION HASH..."],
-      ["🛰️","STABILIZING UPLINK..."],
-      ["✔️","PAYLOAD VERIFIED & EXECUTED"],
-      ["🚀","OPTIMIZING CONNECTION ROUTE..."]
-    ].forEach(([i,t],n)=>setTimeout(()=>{if(!redirectStarted)originalLog(i,t);},2000*(n+1)));
+
     return dest;
   }
   
   function redirectIfReady(){
     if(redirectStarted||!timerFinished||!requestFinished||!pendingDestination)return;
     redirectStarted=true;
-    showToast("SUCCESS","Redirecting now...");
     setTimeout(()=>{location.href=pendingDestination;},250);
   }
   function updateCountdown(){
@@ -313,76 +290,5 @@
   document.getElementById("back").addEventListener("click",()=>{stopProcessingMessages();cancelAnimationFrame(timerId);page("accessPage");});
   document.getElementById("reset").addEventListener("click",()=>{stopProcessingMessages();cancelAnimationFrame(timerId);minutesInput.value="";secondsInput.value="";document.getElementById("progress").style.width="0%";document.getElementById("countRing").style.background="conic-gradient(#18cfe8 0%,#5379f5 0%,rgba(117,164,185,.18) 0%)";document.getElementById("progressText").textContent="PROCESSING 0%";document.getElementById("count").textContent="00:00";page("timePage");});
   
-  let lastRipple=0;
-  function ripple(x,y){
-    const now=performance.now();if(now-lastRipple<55)return;lastRipple=now;
-    const r=document.createElement("span");r.className="ripple";r.style.left=x+"px";r.style.top=y+"px";document.body.appendChild(r);
-    for(let i=0;i<3;i++){
-      const d=document.createElement("span");d.className="drop";d.style.left=x+"px";d.style.top=y+"px";
-      const angle=Math.random()*Math.PI*2,distance=18+Math.random()*18;
-      d.style.setProperty("--dx",Math.cos(angle)*distance+"px");d.style.setProperty("--dy",Math.sin(angle)*distance+"px");
-      document.body.appendChild(d);setTimeout(()=>d.remove(),480);
-    }
-    setTimeout(()=>r.remove(),520);
-  }
-  addEventListener("pointerdown",e=>ripple(e.clientX,e.clientY),{passive:true});
 
-  // Added touch feedback effect.
-  let lastTouch = 0;
-  function bubbleTouch(x, y){
-    const now = performance.now();
-    if(now - lastTouch < 35) return;
-    lastTouch = now;
-
-    const count = 22;
-    for(let i = 0; i < count; i++){
-      const bubble = document.createElement("span");
-      bubble.style.position = "fixed";
-      bubble.style.left = x + "px";
-      bubble.style.top = y + "px";
-      bubble.style.width = (3 + Math.random() * 7) + "px";
-      bubble.style.height = bubble.style.width;
-      bubble.style.borderRadius = "50%";
-      bubble.style.pointerEvents = "none";
-      bubble.style.zIndex = "2147483648";
-      bubble.style.background = "radial-gradient(circle at 30% 25%,rgba(255,255,255,.95),rgba(80,215,235,.48) 42%,rgba(80,125,245,.18))";
-      bubble.style.border = "1px solid rgba(255,255,255,.65)";
-      bubble.style.boxShadow = "0 0 5px rgba(55,200,230,.25),inset 0 0 3px rgba(255,255,255,.8)";
-
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 35 + Math.random() * 85;
-      const dx = Math.cos(angle) * distance;
-      const dy = Math.sin(angle) * distance;
-      const duration = 650 + Math.random() * 500;
-
-      bubble.animate([
-        {transform:"translate(-50%,-50%) scale(.2)",opacity:0},
-        {transform:"translate(-50%,-50%) scale(1)",opacity:.9,offset:.18},
-        {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.35)`,opacity:0}
-      ], {duration,easing:"cubic-bezier(.16,.72,.22,1)",fill:"forwards"});
-
-      document.body.appendChild(bubble);
-      setTimeout(() => bubble.remove(), duration + 50);
-    }
-
-    const center = document.createElement("span");
-    center.style.position = "fixed";
-    center.style.left = x + "px";
-    center.style.top = y + "px";
-    center.style.width = "12px";
-    center.style.height = "12px";
-    center.style.borderRadius = "50%";
-    center.style.pointerEvents = "none";
-    center.style.zIndex = "2147483648";
-    center.style.border = "1px solid rgba(70,205,230,.6)";
-    center.style.boxShadow = "0 0 10px rgba(65,205,230,.25)";
-    center.animate([
-      {transform:"translate(-50%,-50%) scale(.2)",opacity:.8},
-      {transform:"translate(-50%,-50%) scale(3)",opacity:0}
-    ], {duration:500,easing:"ease-out",fill:"forwards"});
-    document.body.appendChild(center);
-    setTimeout(() => center.remove(), 550);
-  }
-
-  addEventListener("pointerdown", e => bubbleTouch(e.clientX, e.clientY), {passive:true});
 })();
